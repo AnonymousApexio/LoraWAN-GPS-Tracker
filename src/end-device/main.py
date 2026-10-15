@@ -21,8 +21,8 @@ print("=== TRACKER SAE501 - VERSION 5 (LoRa + STOP + reveil accelerometre) ===")
 # =====================================================================
 
 # Mode de transmission :
-#   "WIFI" -> Validation 1 : WiFi + MQTT direct vers le broker
-#   "LORA" -> Validations 2 et suivantes : LoRaWAN OTAA vers TTN
+#   "WIFI" -> WiFi + MQTT direct vers le broker
+#   "LORA" -> LoRaWAN OTAA vers la passerelle (Chirpstack)
 MODE = "LORA"
 
 # --- WiFi / MQTT (mode "WIFI") ---
@@ -37,19 +37,20 @@ WIFI_INTERVAL = config.WIFI_INTERVAL # secondes entre deux publications MQTT
 PUSHBULLET_TOKEN = config.PUSHBULLET_TOKEN
 
 # --- LoRaWAN OTAA (mode "LORA") ---
-# Valeurs copiees depuis la page du device sur TTN, format hex MSB, sans espaces.
+# Valeurs copiees depuis la page du device sur le Chirpstack, format hex MSB, sans espaces.
 # NE PAS pousser ces cles sur un depot GitHub public.
 DEV_EUI = config.DEV_EUI                  # DevEUI  (MAC LoRa du FiPy)
 APP_EUI = config.APP_EUI                 # JoinEUI
 APP_KEY = config.APP_KEY  # AppKey  (32 caracteres hex)
 LORA_PORT = 1            # FPort des uplinks
 LORA_DR = 5              # DR5 = SF7 en EU868 (le plus court en temps d'antenne)
-LORA_INTERVAL = 150      # secondes entre deux uplinks (voir Fair Use Policy TTN)
+LORA_INTERVAL = 15      # secondes entre deux uplinks
+LORA_FREQUENCY = 868100000
 
-# --- Ordre STOP recu par downlink (Validation 7) ---
-CMD_STOP = 0x01          # octet produit par le downlink formatter TTN pour {"commande": "stop"}
+# --- Ordre STOP recu par downlink ---
+CMD_STOP = 0x01          # octet produit par le downlink formatter Chirpstack pour {"commande": "stop"}
 
-# --- Veille et reveil par l'accelerometre (Validation 6, etape 9) ---
+# --- Veille et reveil par l'accelerometre ---
 SEUIL_MOUVEMENT_MG = 300   # sensibilite du detecteur de mouvement, en mg (a ajuster aux tests)
 DUREE_MOUVEMENT_MS = 200   # duree minimale du mouvement pour etre pris en compte
 TEMPS_INACTIVITE = 600    # secondes sans mouvement avant la mise en veille
@@ -97,7 +98,7 @@ def get_position(gps):
 
 
 # =====================================================================
-# DETECTION DE MOUVEMENT ET VEILLE (Validation 6)
+# DETECTION DE MOUVEMENT ET VEILLE
 # =====================================================================
 
 dernier_mouvement = time.time()
@@ -266,10 +267,10 @@ def run_wifi(gps):
 # =====================================================================
 
 def encode_position(lat, lon):
-    """Validation 5 : encode lat/lon sur 3 octets chacune (6 octets au total).
+    """Encode lat/lon sur 3 octets chacune (6 octets au total).
     lat : -90..+90   -> 0..16777215  (precision ~1,2 m)
     lon : -180..+180 -> 0..16777215  (precision ~2,4 m)
-    Le decodeur TTN doit faire l'operation inverse."""
+    Le decodeur du LNS doit faire l'operation inverse."""
     lat_i = int((lat + 90.0) / 180.0 * 16777215)
     lon_i = int((lon + 180.0) / 360.0 * 16777215)
     return bytes([
@@ -279,28 +280,30 @@ def encode_position(lat, lon):
 
 
 def join_lora():
-    """Rejoint le reseau LoRaWAN en OTAA et renvoie (lora, socket)."""
     lora = LoRa(mode=LoRa.LORAWAN, region=LoRa.EU868)
-    print("MAC LoRa du FiPy (DevEUI par defaut) :",
-          ubinascii.hexlify(lora.mac()).upper().decode())
 
-    dev_eui = ubinascii.unhexlify(DEV_EUI)
-    app_eui = ubinascii.unhexlify(APP_EUI)
-    app_key = ubinascii.unhexlify(APP_KEY)
+    # Passerelle monocanal : les 3 canaux par defaut sur 868,1 MHz
+    for canal in range(3):
+        lora.add_channel(canal, frequency=LORA_FREQUENCY, dr_min=0, dr_max=5)
 
-    led(LED_BLUE)
-    lora.join(activation=LoRa.OTAA, auth=(dev_eui, app_eui, app_key), timeout=0)
-
+    lora.join(activation=LoRa.OTAA,
+              auth=(ubinascii.unhexlify(DEV_EUI),
+                    ubinascii.unhexlify(APP_EUI),
+                    ubinascii.unhexlify(APP_KEY)),
+              timeout=0, dr=LORA_DR)          # join directement en SF7
     while not lora.has_joined():
         time.sleep(2.5)
         print("Not yet joined...")
     print("Joined")
 
+    # Supprime les canaux ajoutes par le reseau apres le join
+    for canal in range(3, 16):
+        lora.remove_channel(canal)
+
     s = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
     s.setsockopt(socket.SOL_LORA, socket.SO_DR, LORA_DR)
     s.bind(LORA_PORT)
     return lora, s
-
 
 def send_lora(s, data):
     """Envoie un uplink puis lit un eventuel downlink (fenetres RX1/RX2)."""
@@ -327,15 +330,15 @@ def run_lora(gps):
                 print("Position :", lat, lon)
                 downlink = send_lora(s, payload)
 
-                # Validation 7 : un downlink ne peut arriver que juste apres
+                # Un downlink ne peut arriver que juste apres
                 # un uplink (Classe A, fenetres RX1/RX2).
                 if downlink and downlink[0] == CMD_STOP:
-                    entrer_en_veille("ordre STOP recu depuis la passerelle LoRa (TTN)")
+                    entrer_en_veille("ordre STOP recu depuis la passerelle LoRa")
         except Exception as e:
             print("Erreur inattendue dans la boucle :", e)
             led(LED_RED)
 
-        # Obligatoire : duty cycle 1 % en EU868 + Fair Use Policy TTN.
+        # Obligatoire : duty cycle 1 % en EU868
         # L'attente surveille aussi l'inactivite du vehicule.
         attendre(LORA_INTERVAL)
 

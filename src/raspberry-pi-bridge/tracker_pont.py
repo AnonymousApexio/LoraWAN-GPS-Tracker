@@ -10,19 +10,21 @@ import config
 # CONFIGURATION
 # =====================================================================
 
-PUSHBULLET_TOKEN = config.PUSHBULLET_TOKEN
-TTN_APP_ID = config.TTN_APP_ID
-TTN_DEV_ID = config.TTN_DEV_ID
-TTN_API_KEY = config.TTN_API_KEY
-TTN_BROKER = config.TTN_BROKER
+PUSHBULLET_TOKEN = config.PUSHBULLET_TOKEN  # Token Pushbullet pour notifications
+APP_ID = config.APP_ID  # Application ID sur le serveur LNS
+DEV_EUI = config.DEV_EUI  # DevEUI du tracker (MAC LoRa du FiPy)
+BROKER = config.BROKER  # Adresse IP ou nom de domaine du broker MQTT
 
 INTERVALLE_PUSHBULLET = 15      # sec entre 2 lectures des ordres Pushbullet
 SEUIL_DEPLACEMENT_M   = 15      # distance mini vs point de reference pour "bouge"
-NB_CONFIRMATIONS      = 2       # nb d'uplinks consecutifs pour changer d'etat
+NB_CONFIRMATIONS      = 1       # nb d'uplinks consecutifs pour changer d'etat
 RAPPEL_MOUVEMENT_S    = 300     # rappel periodique en mouvement (0 = off)
-SEUIL_SILENCE_S       = 75     # silence > 400 s => tracker considere comme revenu
+SEUIL_SILENCE_S       = 45     # silence > 400 s => tracker considere comme revenu
+INTERVALLE_UPLINK_S = 15   # intervalle d'envoie sur le PyCom
+assert SEUIL_SILENCE_S > INTERVALLE_UPLINK_S * 2, \
+    "SEUIL_SILENCE_S doit etre > 2x l'intervalle d'uplink"
 
-TOPIC = "v3/" + TTN_APP_ID + "@ttn/devices/" + TTN_DEV_ID
+TOPIC = "application/" + APP_ID + "/device/" + DEV_EUI
 PB_URL = "https://api.pushbullet.com/v2/pushes"
 PB_HEADERS = {"Access-Token": PUSHBULLET_TOKEN}
 
@@ -59,26 +61,26 @@ def distance_m(p1, p2):
     return 2 * 6371000 * math.asin(math.sqrt(a))
 
 # =====================================================================
-# TTN MQTT
+# MQTT
 # =====================================================================
 
 def sur_connexion(client, userdata, flags, reason_code, properties):
-    print("Connecte a TTN :", reason_code)
-    client.subscribe(TOPIC + "/up")
-    client.subscribe(TOPIC + "/down/sent")
+    print("Connecxion au LNS :", reason_code)
+    client.subscribe(TOPIC + "/event/up")      # positions du tracker (etapes 12 et 14)
+    client.subscribe(TOPIC + "/event/txack")   # downlink emis par la passerelle (etape 13)
 
 def sur_message(client, userdata, msg):
     global derniere_position, position_reference, etat
     global compteur_mouvement, compteur_arret, dernier_rappel, derniere_uplink_ts
 
-    # --- Confirmation que TTN a transmis un downlink ---
-    if msg.topic.endswith("/down/sent"):
+    # --- Confirmation que Chirpstack a transmis un downlink ---
+    if msg.topic.endswith("event/txack"):
         notifier("Tracker en veille", "Ordre de veille transmis au tracker.")
         return
 
     # --- Uplink de position ---
     try:
-        pos = json.loads(msg.payload)["uplink_message"]["decoded_payload"]
+        pos = json.loads(msg.payload)["object"]
         position = (pos["lat"], pos["lon"])
     except (ValueError, KeyError):
         print("Uplink ignore (pas de position decodee)")
@@ -162,11 +164,10 @@ def sur_message(client, userdata, msg):
 
 def envoyer_ordre_veille(client):
     global etat, position_reference, compteur_mouvement, compteur_arret
-    ordre = {"downlinks": [{"f_port": 1,
-                            "decoded_payload": {"commande": "stop"},
-                            "priority": "NORMAL"}]}
-    client.publish(TOPIC + "/down/replace", json.dumps(ordre))
-    print("Ordre de veille publie sur TTN")
+    ordre = {"devEui": DEV_EUI, "confirmed": False, "fPort": 1,
+         "object": {"commande": "stop"}}
+    client.publish(TOPIC + "/command/down", json.dumps(ordre))
+    print("Ordre de veille publie sur Chirpstack")
     # On remet l'etat a zero : au reveil, la 1ere position servira de reference
     etat = "ARRETE"
     position_reference = None
@@ -184,7 +185,10 @@ def verifier_commandes(client, depuis):
     pushes = r.json().get("pushes", [])
 
     for push in pushes:
-        if push.get("type") == "note" and (push.get("body") or "").strip().lower() == "stop":
+        # created > depuis : seulement les NOUVEAUX messages (un ancien "stop" lu ou
+        # balaye sur le telephone est "modifie" et renverrait sinon un STOP fantome)
+        if (push.get("created", 0) > depuis and push.get("type") == "note"
+                and (push.get("body") or "").strip().lower() == "stop"):
             print("STOP recu depuis Pushbullet")
             envoyer_ordre_veille(client)
 
@@ -196,15 +200,13 @@ def verifier_commandes(client, depuis):
 
 if __name__ == "__main__":
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-    client.username_pw_set(TTN_APP_ID + "@ttn", TTN_API_KEY)
-    client.tls_set()
     client.on_connect = sur_connexion
     client.on_message = sur_message
-    client.connect(TTN_BROKER, 8883)
+    client.connect("172.20.10.6", 1883)
     client.loop_start()
 
     depuis = time.time()
-    print("Pont Pushbullet <-> TTN demarre")
+    print("Pont Pushbullet <-> LNSS demarre")
     while True:
         try:
             depuis = verifier_commandes(client, depuis)

@@ -7,9 +7,6 @@
 # see the Pycom Licence v1.0 document supplied with this file, or
 # available at https://www.pycom.io/opensource/licensing
 #
-
-""" LoPy LoRaWAN Nano Gateway configuration options """
-
 import machine
 import ubinascii
 
@@ -17,14 +14,14 @@ WIFI_MAC = ubinascii.hexlify(machine.unique_id()).upper()
 # Set  the Gateway ID to be the first 3 bytes of MAC address + 'FFFE' + last 3 bytes of MAC address
 GATEWAY_ID = WIFI_MAC[:6] + "FFFE" + WIFI_MAC[6:12]
 
-SERVER = '<SERVER>'
+SERVER = '<SERVER_IP/HOSTNAME>'  # Adresse IP ou nom de domaine du serveur Chirpstack
 PORT = 1700
 
 NTP = "pool.ntp.org"
 NTP_PERIOD_S = 3600
 
-WIFI_SSID = '<WIFI_SSID>'
-WIFI_PASS = '<WIFI_PASS>'
+WIFI_SSID = '<WIFI_SSID>'  #SSID du réseau Wi-Fi
+WIFI_PASS = '<WIFI_PASS>'  #Mot de passe du réseau Wi-Fi
 
 # for EU868
 LORA_FREQUENCY = 868100000

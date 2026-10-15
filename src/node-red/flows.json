@@ -1,0 +1,464 @@
+[
+    {
+        "id": "6e15d5851a46ea69",
+        "type": "worldmap",
+        "z": "1b67ba1108d15729",
+        "name": "carte vehicule",
+        "lat": "48.0794",
+        "lon": "7.3585",
+        "zoom": "13",
+        "layer": "OSMG",
+        "cluster": "",
+        "maxage": "",
+        "usermenu": "show",
+        "layers": "show",
+        "panit": "false",
+        "panlock": "false",
+        "zoomlock": "false",
+        "hiderightclick": "false",
+        "coords": "none",
+        "showgrid": "false",
+        "showruler": "false",
+        "allowFileDrop": "false",
+        "path": "/worldmap",
+        "overlist": "DR,CO,RA,DN",
+        "maplist": "OSMG,OSMC,EsriC,EsriS,UKOS",
+        "mapname": "",
+        "mapurl": "",
+        "mapopt": "",
+        "mapwms": false,
+        "x": 840,
+        "y": 980,
+        "wires": []
+    },
+    {
+        "id": "c7a1000000000001",
+        "type": "function",
+        "z": "1b67ba1108d15729",
+        "name": "ordre STOP",
+        "func": "// Etape 17 : construit l'ordre de mise en veille et le publie\n// sur le topic de downlink de ChirpStack (broker Mosquitto local).\n\n// Anti-rebond : avec ChirpStack, chaque publication AJOUTE un downlink\n// a la file d'attente (pas de \"replace\"). On ignore donc les clics\n// rapproches, ce qui limite aussi le temps d'emission (duty cycle 1 %).\nvar maintenant = Date.now();\nvar dernier = context.get(\"dernierEnvoi\") || 0;\nif (maintenant - dernier < 300000) {\n    node.warn(\"STOP ignore : deja envoye il y a moins de 5 minutes\");\n    return null;\n}\ncontext.set(\"dernierEnvoi\", maintenant);\n\nvar APP_ID = \"272fc846-0568-494e-87c2-46ef135e8d59\";   // UUID de l'application ChirpStack\nvar DEV_EUI = \"70b3d5499bd6a27c\";                       // en minuscules dans les topics\nmsg.topic = \"application/\" + APP_ID + \"/device/\" + DEV_EUI + \"/command/down\";\n\n// L'ordre part en clair : le codec du profil de device (encodeDownlink)\n// le transforme en un seul octet, 0x01.\nmsg.payload = {\n    devEui: DEV_EUI,\n    confirmed: false,\n    fPort: 1,\n    object: { commande: \"stop\" }\n};\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: \"STOP envoye a \" + new Date().toLocaleTimeString(\"fr-FR\") });\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 720,
+        "wires": [
+            [
+                "c7a1000000000002"
+            ]
+        ]
+    },
+    {
+        "id": "c7a1000000000002",
+        "type": "mqtt out",
+        "z": "1b67ba1108d15729",
+        "name": "downlink TTN",
+        "topic": "",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "37cc5a97efed79f4",
+        "x": 660,
+        "y": 720,
+        "wires": []
+    },
+    {
+        "id": "c7a1000000000003",
+        "type": "mqtt in",
+        "z": "1b67ba1108d15729",
+        "name": "suivi downlinks TTN",
+        "topic": "application/+/device/+/event/+",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "37cc5a97efed79f4",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 1080,
+        "wires": [
+            [
+                "c7a1000000000004"
+            ]
+        ]
+    },
+    {
+        "id": "c7a1000000000004",
+        "type": "function",
+        "z": "1b67ba1108d15729",
+        "name": "etat du downlink",
+        "func": "var evt = msg.topic.split(\"/\").pop();\nvar heure = new Date().toLocaleTimeString(\"fr-FR\");\nif (evt === \"txack\") {\n    msg.payload = heure + \" - downlink envoye au FiPy par la passerelle\";\n} else if (evt === \"log\") {\n    msg.payload = heure + \" - LNS : \" + msg.payload.code + \" \" + (msg.payload.description || \"\");\n} else {\n    return null;   // up, join, status... : traites ailleurs\n}\nnode.status({ fill: evt === \"log\" ? \"red\" : \"green\", shape: \"dot\", text: heure + \" \" + evt });\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 1080,
+        "wires": [
+            [
+                "c7a1000000000005"
+            ]
+        ]
+    },
+    {
+        "id": "c7a1000000000005",
+        "type": "debug",
+        "z": "1b67ba1108d15729",
+        "name": "debug downlink",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 660,
+        "y": 1080,
+        "wires": []
+    },
+    {
+        "id": "99c7e8fce6c7af10",
+        "type": "ui-button",
+        "z": "1b67ba1108d15729",
+        "group": "e41b5322e8c587b0",
+        "name": "Bouton STOP",
+        "label": "STOP",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "emulateClick": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "",
+        "payloadType": "str",
+        "topic": "topic",
+        "topicType": "msg",
+        "buttonColor": "",
+        "textColor": "",
+        "iconColor": "",
+        "enableClick": true,
+        "enablePointerdown": false,
+        "pointerdownPayload": "",
+        "pointerdownPayloadType": "str",
+        "enablePointerup": false,
+        "pointerupPayload": "",
+        "pointerupPayloadType": "str",
+        "x": 220,
+        "y": 720,
+        "wires": [
+            [
+                "c7a1000000000001"
+            ]
+        ]
+    },
+    {
+        "id": "d1a2b3c4e5f60001",
+        "type": "function",
+        "z": "1b67ba1108d15729",
+        "name": "coordonnees dashboard",
+        "func": "// Recoit la position deja preparee par \"TTN vers carte\"\n// et l'envoie aux trois textes du dashboard (une sortie par texte).\nvar p = msg.payload;\nreturn [\n    { payload: p.lat.toFixed(5) + \"°\" },\n    { payload: p.lon.toFixed(5) + \"°\" },\n    { payload: new Date().toLocaleTimeString(\"fr-FR\") }\n];",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 910,
+        "y": 840,
+        "wires": [
+            [
+                "d1a2b3c4e5f60002"
+            ],
+            [
+                "d1a2b3c4e5f60003"
+            ],
+            [
+                "d1a2b3c4e5f60004"
+            ]
+        ]
+    },
+    {
+        "id": "d1a2b3c4e5f60002",
+        "type": "ui-text",
+        "z": "1b67ba1108d15729",
+        "group": "d1a2b3c4e5f60010",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "name": "Latitude",
+        "label": "Latitude",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "x": 1170,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "d1a2b3c4e5f60003",
+        "type": "ui-text",
+        "z": "1b67ba1108d15729",
+        "group": "d1a2b3c4e5f60010",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "name": "Longitude",
+        "label": "Longitude",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "x": 1170,
+        "y": 840,
+        "wires": []
+    },
+    {
+        "id": "d1a2b3c4e5f60004",
+        "type": "ui-text",
+        "z": "1b67ba1108d15729",
+        "group": "d1a2b3c4e5f60010",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "name": "Derniere mise a jour",
+        "label": "Derniere mise a jour",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#717171",
+        "wrapText": false,
+        "className": "",
+        "x": 1170,
+        "y": 880,
+        "wires": []
+    },
+    {
+        "id": "10bf4781add1f9f0",
+        "type": "mqtt in",
+        "z": "1b67ba1108d15729",
+        "name": "",
+        "topic": "application/+/device/+/event/up",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "37cc5a97efed79f4",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 190,
+        "y": 980,
+        "wires": [
+            [
+                "6ec3fd3f58f84dee",
+                "e5a1b2c3d4f60001"
+            ]
+        ]
+    },
+    {
+        "id": "6ec3fd3f58f84dee",
+        "type": "function",
+        "z": "1b67ba1108d15729",
+        "name": "function 1",
+        "func": "var o = msg.payload.object;\nif (!o || o.lat === undefined) {\n    node.warn(\"Uplink sans position decodee\");\n    return null;\n}\nmsg.payload = { name: \"vehicule\", lat: o.lat, lon: o.lon, icon: \"car\", iconColor: \"red\" };\nnode.status({ fill: \"green\", shape: \"dot\", text: o.lat.toFixed(5) + \", \" + o.lon.toFixed(5) });\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 500,
+        "y": 980,
+        "wires": [
+            [
+                "6e15d5851a46ea69",
+                "d1a2b3c4e5f60001"
+            ]
+        ]
+    },
+    {
+        "id": "e5a1b2c3d4f60001",
+        "type": "debug",
+        "z": "1b67ba1108d15729",
+        "name": "debug uplink LNS",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload.fCnt",
+        "statusType": "msg",
+        "x": 470,
+        "y": 900,
+        "wires": []
+    },
+    {
+        "id": "37cc5a97efed79f4",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "localhost",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "e41b5322e8c587b0",
+        "type": "ui-group",
+        "name": "commandes",
+        "page": "9c4ed8798b01a0f9",
+        "width": 6,
+        "height": 1,
+        "order": 1,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "d1a2b3c4e5f60010",
+        "type": "ui-group",
+        "name": "position du vehicule",
+        "page": "9c4ed8798b01a0f9",
+        "width": 6,
+        "height": 1,
+        "order": 2,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "9c4ed8798b01a0f9",
+        "type": "ui-page",
+        "name": "suivi",
+        "ui": "d8d6ed636069d5fe",
+        "path": "/page1",
+        "icon": "home",
+        "layout": "grid",
+        "theme": "4485380db234984a",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": "0",
+                "cols": "3"
+            },
+            {
+                "name": "Tablet",
+                "px": "576",
+                "cols": "6"
+            },
+            {
+                "name": "Small Desktop",
+                "px": "768",
+                "cols": "9"
+            },
+            {
+                "name": "Desktop",
+                "px": "1024",
+                "cols": "12"
+            }
+        ],
+        "order": 1,
+        "className": "",
+        "visible": "true",
+        "disabled": "false"
+    },
+    {
+        "id": "d8d6ed636069d5fe",
+        "type": "ui-base",
+        "name": "Suivi vehicule SAE501",
+        "path": "/dashboard",
+        "appIcon": "",
+        "includeClientData": true,
+        "acceptsClientConfig": [
+            "ui-notification",
+            "ui-control"
+        ],
+        "showPathInSidebar": false,
+        "headerContent": "page",
+        "navigationStyle": "default",
+        "titleBarStyle": "default",
+        "showReconnectNotification": true,
+        "notificationDisplayTime": 1,
+        "showDisconnectNotification": true,
+        "allowInstall": false
+    },
+    {
+        "id": "4485380db234984a",
+        "type": "ui-theme",
+        "name": "Default Theme",
+        "colors": {
+            "surface": "#fcfcfd",
+            "primary": "#0d74ce",
+            "bgPage": "#f9f9fb",
+            "groupBg": "#ffffff",
+            "groupOutline": "#d9d9e0"
+        },
+        "sizes": {
+            "density": "default",
+            "pagePadding": "12px",
+            "groupGap": "12px",
+            "groupBorderRadius": "4px",
+            "widgetGap": "12px"
+        }
+    },
+    {
+        "id": "0e3263f6c89b1d77",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-web-worldmap": "5.8.1",
+            "@flowfuse/node-red-dashboard": "1.31.0"
+        }
+    }
+]
