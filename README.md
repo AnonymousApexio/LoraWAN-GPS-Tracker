@@ -122,7 +122,7 @@ sudo apt install -y chirpstack
 
 ### 2. Configuration du Gateway Bridge
 
-Fichier `/etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge.toml` :
+Dans le fichier `/etc/chirpstack-gateway-bridge/chirpstack-gateway-bridge.toml`, modifiez :
 
 ```toml
 [integration.mqtt]
@@ -144,7 +144,7 @@ openssl_rand_-base64_32
 
 Utilisez le résultat pour le paramètre `secret` dans le fichier de configuration ci-dessous. 
 
-Fichier `/etc/chirpstack/chirpstack.toml` :
+Dans le fichier `/etc/chirpstack/chirpstack.toml`, modifiez :
 
 ```toml
 [postgresql]
@@ -164,8 +164,6 @@ enabled=["mqtt"]
 server="tcp://localhost:1883/"
 json=true
 ```
-
-Générer le secret : `openssl rand -base64 32`
 
 ### 4. Configuration du réseau EU868 (monocanal)
 
