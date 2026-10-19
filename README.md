@@ -69,6 +69,9 @@ Le projet est initialement basé sur **The Things Network (TTN)**. Cette version
         ├── config.py       # Configuration de la passerelle (IP du serveur, WiFi, fréquence LoRa, etc.)
         ├── main.py         # Code principal de la passerelle (boucle principale, réception LoRa, envoi UDP)
         ├── nanogateway.py  # Code de la nano-passerelle (réception LoRa, envoi UDP)
+    └── LNS/
+        ├── uplink-formatter.js # Code JavaScript pour décoder les uplinks dans TheThingsNetwork (Au cas où vous voudriez basculer vers TTN)
+        ├── downlink-formatter.js # Code JavaScript pour décoder les downlinks dans TheThingsNetwork (Au cas où vous voudriez basculer vers TTN)
     └── node-red/           # Dossier de configuration Node-RED
         ├── flows.json      # Configuration des flux Node-RED (carte, fonctions, MQTT)
     └── raspberry-pi-bridge/
@@ -270,10 +273,10 @@ function encodeDownlink(input) {
 ![codec](assets/codec.png)
 
 
-3. **Applications** → Add application (nom : `VOTRE_APPLICATION`)
-   - Noter l'**UUID** de l'application → utilisé dans les topics MQTT
+3. **Applications** --> Add application (nom : `VOTRE_APPLICATION`)
+   - Noter l'**UUID** de l'application --> utilisé dans les topics MQTT
     ![application](assets/application.png)
-4. Dans l'application → **Add device**
+4. Dans l'application --> **Add device**
    - Device EUI, Join EUI (0000000000000000), profil `NOM_VOTRE_DEVICE`
    ![end device](assets/end_device.png)
    - Onglet **OTAA keys** : générer une nouvelle Application key
