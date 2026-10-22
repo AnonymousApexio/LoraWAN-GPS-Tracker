@@ -31,6 +31,7 @@ PUSH_ACK = const(1)
 PULL_DATA = const(2)
 PULL_ACK = const(4)
 PULL_RESP = const(3)
+TX_ACK = const(5)          # confirmation d'emission d'un downlink (protocole Semtech UDP v2)
 
 TX_ERR_NONE = 'NONE'
 TX_ERR_TOO_LATE = 'TOO_LATE'
@@ -340,7 +341,7 @@ class NanoGateway:
     def _ack_pull_rsp(self, token, error):
         TX_ACK_PK["txpk_ack"]["error"] = error
         resp = ujson.dumps(TX_ACK_PK)
-        packet = bytes([PROTOCOL_VERSION]) + token + bytes([PULL_ACK]) + ubinascii.unhexlify(self.id) + resp
+        packet = bytes([PROTOCOL_VERSION]) + token + bytes([TX_ACK]) + ubinascii.unhexlify(self.id) + resp  # TX_ACK (5) et non PULL_ACK (4)
         with self.udp_lock:
             try:
                 self.sock.sendto(packet, self.server_ip)
